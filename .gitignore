@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.venv/
+venv/
+
+# 本地运行日志
+*.log
+
+# 本机快捷方式（内含绝对路径）
+*.lnk
+
+# Node probe 依赖
+node_modules/
+
+# 本地 ASR 模型（约 685MB）
+# 从 sherpa-onnx 官方重新下载，不进版本库：
+# https://github.com/k2-fsa/sherpa-onnx/releases
+sherpa-onnx-probe/models/

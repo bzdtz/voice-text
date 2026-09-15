@@ -1,0 +1,13 @@
+{
+  "name": "sherpa-onnx-probe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Probe: validate sherpa-onnx streaming zipformer for MeetingCopilot integration",
+  "type": "commonjs",
+  "scripts": {
+    "probe": "node probe-streaming.js"
+  },
+  "dependencies": {
+    "sherpa-onnx-node": "^1.13.4"
+  }
+}

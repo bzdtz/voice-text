@@ -1,0 +1,13 @@
+# Both modes share these desktop and microphone dependencies.
+keyboard
+sounddevice
+numpy
+pyperclip
+pillow
+pystray
+
+# Cloud mode only
+requests
+
+# Local streaming Zipformer (Chinese/English)
+sherpa-onnx
