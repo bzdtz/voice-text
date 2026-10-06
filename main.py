@@ -446,7 +446,12 @@ class VoiceInputApp:
             if self.local_model and self.local_model.uses_punctuation:
                 extras.append("标点")
             extra_note = f"（已启用{'/'.join(extras)}）" if extras else ""
-            self.mode_label.config(text=f"当前模式：本地流式 Zipformer（中英）{extra_note}")
+            model_note = (
+                f"（{self.local_model.config.name}）"
+                if self.local_model is not None
+                else ""
+            )
+            self.mode_label.config(text=f"当前模式：本地流式 ASR{model_note}{extra_note}")
             if self.local_model is not None:
                 self.set_status("待命中（本地流式，Ctrl + Space）", "#007AFF")
             elif load_local and not self.model_loading:
@@ -469,8 +474,10 @@ class VoiceInputApp:
             extra_note = f"（已启用{'/'.join(extras)}）" if extras else ""
             status_note = f"，{'/'.join(extras)}已加载" if extras else ""
 
+            model_note = f"（{model.config.name}）"
+
             def mark_ready() -> None:
-                self.mode_label.config(text=f"当前模式：本地流式 Zipformer（中英）{extra_note}")
+                self.mode_label.config(text=f"当前模式：本地流式 ASR{model_note}{extra_note}")
                 self.set_status(f"待命中（本地流式{status_note}，Ctrl + Space）", "#007AFF")
 
             self.root.after(0, mark_ready)

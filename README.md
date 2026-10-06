@@ -2,7 +2,7 @@
 
 按住 `Ctrl + Space` 录音，松开后识别整段音频；结果自动复制到剪贴板，并显示在主窗口和可编辑浮窗中。
 
-- `local` 模式：本地推理，全程离线。模型为 sherpa-onnx 的 Streaming Zipformer（中英双语），可选挂 CT-Transformer 做标点恢复。
+- `local` 模式：本地推理，全程离线。默认模型为 [X-ASR](https://github.com/Gilgamesh-J/X-ASR) 流式 Zipformer 中英双语（内置标点恢复），未下载时自动回退到 sherpa-onnx 官方基线模型并挂 CT-Transformer 补标点。
 - `cloud` 模式：整段上传到 SiliconFlow，接口 `POST https://api.siliconflow.cn/v1/audio/transcriptions`，模型 `FunAudioLLM/SenseVoiceSmall`。
 
 Python / Tk 桌面程序，录音基于 `sounddevice` 单声道实现，不依赖浏览器 `getUserMedia` / `MediaRecorder`，云端模式也无需 ffmpeg 或本地 ASR 进程。
@@ -27,7 +27,16 @@ Python / Tk 桌面程序，录音基于 `sounddevice` 单声道实现，不依�
 | `streaming_paraformer_bilingual` | 237MB | 0.576 | 0.70s | 0.95 | 0 |
 | `x-asr_punct_int8_480ms` | 169MB | 0.436 | 1.12s | **0.99** | 4 |
 
-评测选出 `x-asr_punct_int8_480ms`，但**这个结论还没落到代码里**——`local_asr.py` 目前仍指向表里表现最差的基线模型。原因和待办写在评测文档最后一节。
+评测选出的 `x-asr_punct_int8_480ms` 已落地到代码：`local_asr.py` 按 `CANDIDATE_MODELS` 优先级加载，x-asr 排第一，基线 Zipformer 作兜底，所以没下载 x-asr 也不会坏。
+
+模型能力是**声明式**的，不是硬编码路径——每个模型声明自己的文件布局和两项能力，加载器据此决定挂什么：
+
+| 能力 | x-asr（默认） | 基线 Zipformer（兜底） |
+|---|---|---|
+| `builtin_punctuation` | `True`，跳过 CT-Transformer | `False`，挂 `OfflinePunctuator` |
+| `bpe_vocab` | 缺失 → 热词如实标记为不可用 | 存在 → 热词可用 |
+
+热词和标点链路都保留了：它们是兜底路径的有效代码，而不是死代码。落地细节和验证数据见 [docs/ASR模型选型评测.md](docs/ASR模型选型评测.md) 的「落地状态」一节。
 
 ---
 
@@ -54,14 +63,17 @@ python main.py
 
 仓库本体不含模型文件（体积过大），**只有要用 `local` 模式才需要下载**，用 `cloud` 模式可直接跳过本节。
 
-在 [Releases](https://github.com/bzdtz/voice-text/releases) 页下载压缩包，解压到项目根的 `sherpa-onnx-probe\models\` 下即可（解压后的目录名必须保持不变）：
+解压到项目根的 `sherpa-onnx-probe\models\` 下即可，**解压后的目录名必须保持不变**（加载器按目录名匹配模型配置）。
 
-| 压缩包 | 用途 | 是否必需 |
+| 模型目录 | 用途 | 来源 |
 | --- | --- | --- |
-| `models-streaming-bilingual-zh-en.zip` | 中英双语流式识别主模型 | 是 |
-| `models-punctuation-ct-transformer.zip` | 自动补全句号、逗号等标点 | 否，缺失时退化为无标点输出 |
+| `sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05` | **默认主模型**，内置标点 | [Gilgamesh-J/X-ASR](https://github.com/Gilgamesh-J/X-ASR)（Apache-2.0） |
+| `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20` | 兜底主模型，无内置标点 | 本仓库 [Releases v1.0](https://github.com/bzdtz/voice-text/releases/tag/v1.0) 的 `models-streaming-bilingual-zh-en.zip` |
+| `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | 仅为兜底模型补标点 | 同上，`models-punctuation-ct-transformer.zip` |
 
-PowerShell 一键下载并解压：
+只下第一个模型即可，应用会以完整功能运行。只下第二个时也能跑，但准确度回到基线水平（评测见上文），且需要标点模型才有关联标点。
+
+下载兜底模型：
 
 ```powershell
 cd sherpa-onnx-probe\models
@@ -70,19 +82,29 @@ Expand-Archive -Path "asr.zip" -DestinationPath "." -Force
 Remove-Item "asr.zip"
 ```
 
-解压完成后目录应形如：
+默认模型目录应形如：
 
 ```
 sherpa-onnx-probe\models\
-└── sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20\
+└── sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05\
     ├── tokens.txt
-    ├── encoder-epoch-99-avg-1.int8.onnx
-    ├── decoder-epoch-99-avg-1.onnx
-    ├── joiner-epoch-99-avg-1.int8.onnx
-    └── bpe.vocab
+    ├── encoder.int8.onnx
+    ├── decoder.onnx
+    ├── joiner.int8.onnx
+    └── bpe.model
 ```
 
-模型原始版权归 sherpa-onnx 项目所有。
+注意：该模型**没有 `bpe.vocab`**，所以热词加权对它不可用，应用会如实显示"热词未启用"。这是模型本身的限制，不是配置错误。
+
+## 模型版权
+
+| 模型 | 许可 | 出处 |
+| --- | --- | --- |
+| X-ASR（默认） | Apache-2.0 | [Gilgamesh-J/X-ASR](https://github.com/Gilgamesh-J/X-ASR) |
+| Streaming Zipformer 双语基线 | 见模型仓库 LICENSE | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) |
+| CT-Transformer 标点 | 见模型仓库 LICENSE | 同上 |
+
+本仓库不含模型权重，均由用户自行下载。使用 Apache-2.0 模型需保留其版权声明与许可文本。
 
 ## 云端模式
 
@@ -107,18 +129,23 @@ python eval\gui.py         # 三个模型实时切换对比
 ## 测试
 
 ```powershell
-python -m unittest -v test_cloud_asr.py
+python -m unittest -v test_cloud_asr.py test_local_asr.py test_audio_processing.py
 ```
 
-测试覆盖云端请求构造、`text` 响应解析、取消结果、缺失响应文本和服务端错误信息。
+- `test_cloud_asr.py`：云端请求构造、`text` 响应解析、取消结果、缺失响应文本和服务端错误信息
+- `test_local_asr.py`：模型解析优先级、能力声明（标点 / 热词）、静音解码、标点阶段在回退路径上仍然可用
+- `test_audio_processing.py`：音频重采样与削波处理
+
+`test_local_asr.py` 依赖真实模型文件，缺失时会失败——这是有意的，避免"没下载模型也能测过"的假绿灯。
 
 ## Roadmap
 
-- [ ] **落地选型结论**：把本地模型切换到评测选出的 `x-asr_punct_int8_480ms`（`local_asr.py` 当前仍指向基线 Zipformer），并移除不再需要的 CT-Transformer 标点恢复链路
-- [ ] **端到端延迟测量**：评测测的是模型 RTF，还需要测「松开热键 → 结果上屏」的用户体感延迟
+- [x] **落地选型结论**：本地默认模型已切换为评测选出的 `x-asr_punct_int8_480ms`，基线 Zipformer 保留为兜底（见上文「模型选型」）
+- [ ] **端到端延迟测量**：已测得首字出现位置（音频位置 1.12s），但还缺「松开热键 → 结果上屏」的完整链路测量，包括 UI 线程回切
+- [ ] **修 x-asr 的中文标点后空格**：实测输出形如 `房间， wifi`，中文逗号后多一个空格，需要一个小后处理
 - [ ] **扩充评测集**：当前 6 段均为 TTS 合成音频，计划加入真人录音、背景噪声和长时音频，并补 WER/CER
 - [ ] **云端模式成本表**：给出单次调用的实际成本，与本地模式对比
-- [ ] **浏览器级交互测试**：现有单测覆盖云端请求链路，本地模型部分待补
+- [ ] **评估端点检测对输入法的适配**：流式端点检测会在自然停顿处截断，输入法语境下用户中途停顿思考就会导致文本提前提交，需要确认开关策略
 
 评测的方法论、控制变量和已知局限完整记录在 [docs/ASR模型选型评测.md](docs/ASR模型选型评测.md)。
 

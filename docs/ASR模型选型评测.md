@@ -68,12 +68,37 @@
 
 ## 落地状态
 
-⚠️ **本结论尚未落到代码里。** 截至本文档写入时，`local_asr.py` 仍指向 `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20`（即表格里表现最差的基线模型）。
+✅ **已落地。** `local_asr.py` 现在按 `CANDIDATE_MODELS` 的优先级选择模型，x-asr 排第一，基线 Zipformer 作为兜底——所以即使没下载 x-asr，应用也不会坏。
 
-待完成：
-1. `local_asr.py` 的 `LOCAL_STREAMING_MODEL_DIRS` 切到 x-asr 目录，同步 `tokens.txt` / `encoder.int8.onnx` / `decoder.onnx` / `joiner.int8.onnx` 的文件名
-2. 删除 `OfflinePunctuator` / `resolve_punctuation_model` / CT-Transformer 依赖（x-asr 自带标点）
-3. 更新 `README.md` 的模型下载表
-4. 重跑 `eval/compare.py` 验证线上实际效果与评测一致
+选型不是硬编码路径，而是**能力驱动**的：每个模型声明自己的文件布局和两项能力，加载器按声明决定挂什么、不挂什么。
 
-**如果只看这个仓库的代码而不看这篇文档，会把"产品在用最差模型"当成"评测白做了"。所以这一节必须保留。**
+| 能力 | x-asr（选中） | 基线 Zipformer（兜底） |
+|---|---|---|
+| `builtin_punctuation` | `True` → 不挂 CT-Transformer | `False` → 挂 `OfflinePunctuator` |
+| `bpe_vocab` 文件 | 缺失 → 热词标记为不可用 | 存在 → 热词可用 |
+
+### 为什么不直接删掉标点链路
+
+计划里写过"删除 CT-Transformer 标点链路"，实际保留了。因为兜底模型需要它：如果 x-asr 没下载，应用回退到基线 Zipformer，那时没有标点阶段输出就没有标点。`OfflinePunctuator` / `resolve_punctuation_model` 仍是兜底路径的有效代码，`test_punctuation_adds_marks` 专门测它还在工作。
+
+同理热词也没有删。x-asr 不带 `bpe.vocab`，而热词加权依赖它；保留代码但由配置判定不可用，UI 上如实显示"热词未启用"，而不是静默退化成 `greedy_search`。
+
+### 验证
+
+用 `eval/audio/` 的 6 段音频走**应用真实调用路径**（`StreamingZipformerASR` → `create_session()` → 100ms 分块 `accept()` → `finish()`）复测，不是重跑评测脚本：
+
+| 指标 | 基线 | x-asr（应用实测） |
+|---|---|---|
+| 平均字符相似度 | 0.72 | **0.991** |
+| 全大写英文字符总数 | 119 | **4** |
+| 首字出现（音频位置） | 0.65s | 1.12s |
+
+首字延迟与上文表格的 1.12s 完全一致，说明这条验证路径与评测脚本测的是同一件事。
+
+顺带暴露了 x-asr 的两个真实瑕疵（不是评测问题）：标点符号后多一个空格（`房间， wifi`），以及中英文夹杂时偶发替换（`tomorrow 的 meeting` → `tomorrow the meeting`，该句相似度 0.952，其余 5 句 ≥0.991）。
+
+### 落地过程中踩到的一个坑
+
+`model_type="zipformer"` 会让 x-asr **直接崩溃**（onnxruntime 内 abort，退出码 255，没有 Python 异常可捕）。x-asr 的 encoder 缺少该路径所需的 `attention_dims` 图元数据，基线模型有，所以旧代码没事。
+
+不传 `model_type`，让 sherpa-onnx 从图上推断架构，就能正常加载——这也正好和评测脚本一致（评测没传这个参数）。已在 `local_asr.py` 留注释说明原因，这是换模型时最容易踩的坑。

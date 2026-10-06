@@ -15,7 +15,7 @@ venv/
 # Node probe 依赖
 node_modules/
 
-# 本地 ASR 模型（约 685MB）
-# 从 sherpa-onnx 官方重新下载，不进版本库：
-# https://github.com/k2-fsa/sherpa-onnx/releases
+# 本地 ASR 模型（数百 MB 起），不进版本库。下载来源见 README.md 的「模型版权」：
+# - 默认模型 X-ASR：https://github.com/Gilgamesh-J/X-ASR （Apache-2.0）
+# - 兜底模型 / 标点模型：https://github.com/k2-fsa/sherpa-onnx/releases
 sherpa-onnx-probe/models/
