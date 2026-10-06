@@ -7,6 +7,7 @@ a check that model resolution picked a loadable candidate.
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -67,6 +68,31 @@ class LocalAsrTests(unittest.TestCase):
         result = punctuator.add_punctuation("今天天气很好我们去公园玩吧")
         self.assertTrue(
             any(mark in result for mark in ("，", "。", "？", "！", ",", ".", "?", "!"))
+        )
+
+    def test_endpoint_detection_is_pinned_off(self) -> None:
+        # Push-to-talk has exactly one terminator: the user letting go of the
+        # hotkey. Endpoint detection adds a second one based on trailing
+        # silence, which would cut a mid-thought pause. The flag is pinned
+        # rather than inherited from sherpa-onnx's default -- a default nobody
+        # chose here is a default upstream can change.
+        #
+        # Behaviours do not distinguish the flag in this build (rule1 is
+        # inert), so assert the kwarg. This fails the moment someone drops it.
+        import sherpa_onnx
+
+        with mock.patch.object(
+            sherpa_onnx.OnlineRecognizer,
+            "from_transducer",
+            side_effect=FileNotFoundError("weights not loaded by this test"),
+        ) as patched:
+            with self.assertRaises(FileNotFoundError):
+                StreamingZipformerASR()
+
+        self.assertIs(
+            patched.call_args.kwargs.get("enable_endpoint_detection"),
+            False,
+            "endpoint detection must be pinned off, not left to the default",
         )
 
 

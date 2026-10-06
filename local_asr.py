@@ -294,6 +294,21 @@ class StreamingZipformerASR:
             "feature_dim": 80,
             "provider": "cpu",
         }
+        # Pin endpoint detection off. Leaving it unset relies on sherpa-onnx's
+        # default (False), which is what we measured -- but a default we did not
+        # choose is a default someone else can change. Push-to-talk has exactly
+        # one terminator, the user letting go of the hotkey; a second terminator
+        # based on trailing silence would cut a user's thought in half.
+        #
+        # eval/bench_endpoint.py measured this on 20.8s of audio with 3.0s
+        # mid-utterance pauses: the endpoint fires after ~1.6s of trailing
+        # silence regardless of rule1_min_trailing_silence (0.5/2.4/10.0 all
+        # fired at the same point), so the tuning knob most people reach for
+        # does nothing in this build. It would also change nothing here,
+        # because StreamingSession never reads is_endpoint() -- the flag is
+        # computed and discarded. Off is both the safe choice and the only
+        # honest one.
+        kwargs["enable_endpoint_detection"] = False
         # Do NOT set model_type="zipformer". Some community encoders (X-ASR
         # among them) omit the attention_dims graph metadata that path
         # requires, and forcing the architecture aborts inside onnxruntime

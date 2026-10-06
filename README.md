@@ -116,13 +116,15 @@ sherpa-onnx-probe\models\
 
 ```powershell
 pip install -r eval\requirements.txt
-python eval\compare.py     # 跑完把结果写到 eval\report.md
-python eval\gui.py         # 三个模型实时切换对比
-python eval\bench_tail.py  # 测 finish() 的静音尾部到底要多长才有效
+python eval\compare.py        # 跑完把结果写到 eval\report.md
+python eval\gui.py            # 三个模型实时切换对比
+python eval\bench_tail.py     # 测 finish() 的静音尾部到底要多长才有效
+python eval\bench_endpoint.py # 端点检测开着会不会改输出，以及那个开关调不调得动
 ```
 
 - `eval/make_audio.py` 生成评测集（edge-tts 合成，prompt 文本即 ground truth）
 - `eval/bench_tail.py` 复现「0.3s 静音尾部是最小有效值」这个结论，用来支持 `local_asr.py` 里那个默认值
+- `eval/bench_endpoint.py` 复现「开着端点检测也改不了输出」这个结论，用来支持 `local_asr.py` 里显式关掉的理由
 - `eval/audio/` 已包含生成好的 6 段音频，不需要重新合成
 - 模型体积较大，默认从 `sherpa-onnx-probe\models\` 找，可用环境变量 `VOICE_TEXT_EVAL_MODELS` 指向别处；缺哪个模型就跳过哪个，不会中断
 
@@ -144,11 +146,11 @@ python -m unittest -v test_cloud_asr.py test_local_asr.py test_audio_processing.
 
 - [x] **落地选型结论**：本地默认模型已切换为评测选出的 `x-asr_punct_int8_480ms`，基线 Zipformer 保留为兜底（见上文「模型选型」）
 - [x] **定稿延迟测量**：已测得「松开热键 → 最终文本」的解码耗时（约 35ms，跑 3 次均值 30–38ms），并据此把 `finish()` 的静音尾部从 0.6s 调到实测有效的最小值 0.3s。见 [docs](docs/ASR模型选型评测.md) 的「延迟实测」
-- [ ] **真机端到端计时**：上面的 38ms 只是解码段，不含 sounddevice 停流、Tk 抖动、剪贴板和浮窗渲染。真实体感数字只能在真机上测
+- [ ] **真机端到端计时**：上面的约 35ms 只是解码段，不含 sounddevice 停流、Tk 抖动、剪贴板和浮窗渲染。真实体感数字只能在真机上测
 - [ ] **修 x-asr 的中文标点后空格**：实测输出形如 `房间， wifi`，中文逗号后多一个空格，需要一个小后处理
 - [ ] **扩充评测集**：当前 6 段均为 TTS 合成音频，计划加入真人录音、背景噪声和长时音频，并补 WER/CER
 - [ ] **云端模式成本表**：给出单次调用的实际成本，与本地模式对比
-- [ ] **评估端点检测对输入法的适配**：流式端点检测会在自然停顿处截断，输入法语境下用户中途停顿思考就会导致文本提前提交，需要确认开关策略
+- [x] **定稿端点检测策略**：已显式关闭并写明理由。按住说话只有一个终止信号（松开热键），端点检测是第二个，输入法语境下不该有。实测开着也改不了输出——`StreamingSession` 从不读 `is_endpoint()`，标志位算出来即被丢弃。详见 [docs](docs/ASR模型选型评测.md) 的「端点检测」
 
 评测的方法论、控制变量和已知局限完整记录在 [docs/ASR模型选型评测.md](docs/ASR模型选型评测.md)。
 
