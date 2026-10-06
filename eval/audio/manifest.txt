@@ -1,0 +1,6 @@
+s01_mixed_official	5.736	昨天是 monday today day is zero eight two the day after tomorrow 是星期三
+s02_digits_letters	7.176	我住在 building three 号楼的 twelve o two 房间，wifi 密码是 a b c 一二三四五六
+s03_tech	7.344	这个 api 的 latency 是 fifty milliseconds，支持 http two 和 websocket 协议
+s04_switch	4.776	we need to 讨论一下 tomorrow 的 meeting agenda 和 budget
+s05_chinese	5.280	今天我们讨论了新产品的发布计划，下周一进行内测
+s06_english	4.752	The meeting was postponed to next tuesday afternoon at three thirty

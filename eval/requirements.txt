@@ -1,0 +1,12 @@
+# 模型评测与交互式对比的额外依赖
+# （桌面应用本身的依赖见项目根目录 requirements.txt）
+
+# compare.py / make_audio.py / gui.py
+numpy
+scipy
+sherpa-onnx
+sounddevice
+soundfile
+
+# 重新生成评测音频时才需要
+edge-tts
