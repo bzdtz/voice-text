@@ -211,7 +211,11 @@ class StreamingSession:
                 self._recognizer.decode_stream(self._stream)
             return self._recognizer.get_result(self._stream)
 
-    def finish(self, tail_seconds: float = 0.6) -> str:
+    def finish(self, tail_seconds: float = 0.3) -> str:
+        # Measured, not guessed: eval/bench_tail.py scores final text at several
+        # tail lengths. 0.3s and 0.6s give identical output (0.9905 mean
+        # similarity) while 0.0s / 0.15s truncate the last tokens. 0.3s is the
+        # minimum that works, so it is the default.
         with self._lock:
             if tail_seconds > 0:
                 tail = np.zeros(int(16000 * tail_seconds), dtype=np.float32)
