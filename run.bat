@@ -53,22 +53,48 @@ rem ===== Queued interpreter if it exists AND can import runtime deps =====
 :TRY_INTERPRETER
 if "%~1"=="" goto :EOF
 if not exist "%~1" goto :EOF
-"%~1" -c "import keyboard, sounddevice, numpy, pyperclip, PIL, pystray, requests" >nul 2>&1
+rem Cheap pre-filter: the pure-python desktop packages are what set this
+rem project's env apart from the rest of the machine's envs, and they import
+rem in milliseconds. Most envs are rejected here, without paying for the slow
+rem numpy/sounddevice/PIL imports of an env that was going to fail anyway.
+"%~1" -c "import keyboard, pyperclip" >nul 2>&1
+if not errorlevel 1 "%~1" -c "import keyboard, sounddevice, numpy, pyperclip, PIL, pystray, requests" >nul 2>&1
 if not errorlevel 1 set "PYTHON_EXE=%~1"
 goto :EOF
 
 rem ===== Locate conda installation root(s), then walk envs/ =====
 :SCAN_CONDA_ENVS
+rem Roots come from two places. `where conda` is the usual route, but conda's
+rem own Scripts dir is often missing from PATH (only the base install dir is
+rem listed). Then this step finds nothing and every env below it is invisible,
+rem so the script falls through to a base interpreter that lacks this project's
+rem dependencies. Deriving the root from python's own location covers that case:
+rem python.exe always sits next to an envs\ directory.
 for /f "delims=" %%C in ('where conda 2^>nul') do (
     if not defined PYTHON_EXE (
         set "CONDA_BIN=%%~dpC"
         rem %%~dpC ends with a backslash; strip it, then take its parent => conda root
         for %%Q in ("!CONDA_BIN:~0,-1!") do set "CONDA_ROOT=%%~dpQ"
-        if exist "!CONDA_ROOT!envs" (
-            for /d %%E in ("!CONDA_ROOT!envs\*") do (
-                call :TRY_INTERPRETER "%%~E\python.exe"
-            )
-        )
+        call :SCAN_CONDA_ROOT
+    )
+)
+for /f "delims=" %%P in ('where python 2^>nul') do (
+    if not defined PYTHON_EXE (
+        rem python.exe at the install root sits next to envs\, so its own
+        rem directory is the root. Taking the parent of a directory string is
+        rem not safe: with no filename to anchor it, G:\anaconda parses as a
+        rem file and yields the drive root instead.
+        set "CONDA_ROOT=%%~dpP"
+        call :SCAN_CONDA_ROOT
+    )
+)
+goto :EOF
+
+rem ===== Scan one conda root's envs\ directory =====
+:SCAN_CONDA_ROOT
+if exist "!CONDA_ROOT!envs" (
+    for /d %%E in ("!CONDA_ROOT!envs\*") do (
+        if not defined PYTHON_EXE call :TRY_INTERPRETER "%%~E\python.exe"
     )
 )
 goto :EOF
