@@ -5,7 +5,7 @@
 - `local` 模式：本地推理，全程离线。默认模型为 [X-ASR](https://github.com/Gilgamesh-J/X-ASR) 流式 Zipformer 中英双语（内置标点恢复），未下载时自动回退到 sherpa-onnx 官方基线模型并挂 CT-Transformer 补标点。
 - `cloud` 模式：整段上传到 SiliconFlow，接口 `POST https://api.siliconflow.cn/v1/audio/transcriptions`，模型 `FunAudioLLM/SenseVoiceSmall`。
 
-Python / Tk 桌面程序，录音基于 `sounddevice` 单声道实现，不依赖浏览器 `getUserMedia` / `MediaRecorder`，云端模式也无需 ffmpeg 或本地 ASR 进程。
+Python / Tk 桌面程序，**目前仅在 Windows 上验证过**，环境要求见下文「环境要求」一节；录音基于 `sounddevice` 单声道实现，不依赖浏览器 `getUserMedia` / `MediaRecorder`，云端模式也无需 ffmpeg 或本地 ASR 进程。
 
 ---
 
@@ -40,6 +40,22 @@ Python / Tk 桌面程序，录音基于 `sounddevice` 单声道实现，不依�
 
 ---
 
+## 环境要求
+
+- **平台：目前只支持 Windows**（Windows 10 / 11 实测）。代码里没有 Windows 专属 API（无 ctypes / win32 调用），但全局热键、托盘图标、剪贴板三件事都是只在 Windows 上验证过的；Linux / macOS 未验证，`keyboard` 注册全局热键在那两个系统上还需要额外权限（Linux 的输入设备节点、macOS 的辅助功能授权）。启动脚本 `run.bat` / `语音输入法启动助手.vbs` 也只能在 Windows 上用。
+- **Python 3.9 及以上，x86_64**（本机验证过 3.9.21 和 3.10.19，两者都能完整跑起来）。下限由代码里的语法决定；上限受 `sherpa-onnx` 的预编译包覆盖范围限制——版本过新、过老，或架构不是 x86_64（如 ARM Windows），`pip install -r requirements.txt` 可能直接失败。
+- 依赖就是 `requirements.txt` 里那 8 个包，没有别的隐含依赖。
+- 首次运行 Windows 可能弹出麦克风访问询问；如果按住快捷键录到的是静音，检查「设置 → 隐私 → 麦克风」。
+
+国内网络下 PyPI 官方源较慢，可以先配镜像再装：
+
+```powershell
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install -r requirements.txt
+```
+
+---
+
 ## 安装与启动
 
 ```powershell
@@ -51,7 +67,7 @@ python main.py
 
 1. 项目目录下的 `.venv`
 2. 当前已激活的 conda / virtualenv 环境
-3. 本机任意 conda 环境中**已装好项目依赖**的那个
+3. 本机任意 conda 环境中**已装好项目依赖**的那个（conda 不在 `PATH` 里也能找到：脚本会顺着 `python.exe` 的位置去 `envs\` 目录里找）
 4. `PATH` 中已装好项目依赖的 `python`
 5. 以上都没有时，回退到系统 `python` 并提示安装依赖
 
